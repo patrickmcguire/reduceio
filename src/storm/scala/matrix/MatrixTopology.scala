@@ -135,10 +135,29 @@ class MatrixPrint extends StormBolt(List("r1", "c1", "v1", "r2", "c2", "v2")) {
 }
 
 
+class MatrixBlockMult extends StormBolt(List("rowIndices", "columnIndices", "result")) {
+
+  def execute(t: Tuple) = t matchSeq {
+    case Seq(rowIndices: List[Int], columnIndices: List[Int], 
+      rows: SparseDoubleMatrix2D, columns: SparseDoubleMatrix2D) => 
+        using anchor t toStream "rowIndices" emit (rowIndices)
+        using anchor t toStream "columnIndices" emit (columnIndices)
+        val target = new SparseDoubleMatrix2D(rows.columns, columns.rows)
+        rows.zMult(columns, target, 1, 0, false, false)
+        using anchor t toStream "result" emit target
+        t ack
+    case _ => {}
+  }
+}
+
+
+class MatrixCombine
+
+
 object MatrixTopology {
   def main(args: Array[String]) = {
     val builder = new TopologyBuilder
-    builder.setSpout("matrix", new RedisMatrixSpout, 1)
+    builder.setSpout("matrix", new FileMatrixSpout("/home/patrick/Code/hivemind/count.mtx", 16), 1)
     builder.setBolt("mult", new MatrixPrint, 1)
 
     val conf = new Config
