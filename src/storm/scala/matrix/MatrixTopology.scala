@@ -11,23 +11,32 @@ import redis.clients.jedis._
 import scala.util.matching.Regex.Match
 import scala.collection.mutable.ListBuffer
 import scala.collection.JavaConversions._
-import cern.colt.matrix.impl.SparseDoubleMatrix2D
-import storm.scala.matrix.MatrixMarket
+import cern.colt.matrix.tdouble.impl.SparseDoubleMatrix2D
 
 class FileMatrixSpout(filename: String, concurrency: Integer) 
   extends StormSpout(List("row_indices", "column_indices", "rows", "columns")) {
 
-  var matrix: cern.colt.matrix.impl.SparseDoubleMatrix2D = _
+  var matrix: cern.colt.matrix.tdouble.impl.SparseDoubleMatrix2D = _
   var linearDivision: Integer = _
   var zippedIterator: scala.collection.Iterator[(Int,Int)] = _
+  var rowRange: scala.collection.immutable.Range = _
+  var columnRange: scala.collection.immutable.Range = _
+  var rowIterator: scala.collection.Iterator[Int] = _
+  var columnIterator: scala.collection.Iterator[Int] = _
+  var matrixMarket: MatrixMarket = _
 
   def setup {
-    val matrixMarket = new storm.scala.matrix.MatrixMarket(filename)
-    matrix = matrixMarket.getMatrix
+    matrixMarket = new storm.scala.matrix.MatrixMarket(filename)
     linearDivision = scala.math.sqrt(concurrency.toDouble).toInt
-    val rowIterator = (0 until linearDivision).iterator
-    val columnIterator = (0 until linearDivision).iterator
+    rowRange = 0 until linearDivision
+    rowIterator = rowRange.iterator
+    columnRange = 0 until linearDivision 
+    columnIterator = columnRange.iterator
+    matrix = matrixMarket.matrix
     zippedIterator = rowIterator.zipAll(columnIterator,-1,-1)
+    for (i <- 0 until 100) {
+      println(zippedIterator)
+    }
   }
 
   def nextTuple {

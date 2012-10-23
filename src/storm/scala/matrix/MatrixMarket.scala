@@ -1,7 +1,7 @@
 package storm.scala.matrix
 
 import scala.io.Source
-import cern.colt.matrix.impl.SparseDoubleMatrix2D
+import cern.colt.matrix.tdouble.impl.SparseDoubleMatrix2D
 import scala.util.matching.Regex.Match
 
 class MatrixMarket(filename: String) {
@@ -17,17 +17,17 @@ class MatrixMarket(filename: String) {
   // rows columns nonzeros
   val param_parser = """(\d+) (\d+) (\d+)""".r
   val param_parser(rows, columns, nonzeros) = lines.next
-  val matrix = new SparseDoubleMatrix2D(
-      rows.toInt, columns.toInt, nonzeros.toInt, 0.0, 1.0)
+  private val _matrix = new SparseDoubleMatrix2D(
+      rows.toInt + 1, columns.toInt + 1, nonzeros.toInt, 0.1, 0.9)
 
   for (cell <- lines) {
     val args = cell.split(" ")
     val row_id = args(0).toInt
     val col_id = args(1).toInt
     val value = args(2).toDouble
-    matrix.set(row_id, col_id, value)
+    _matrix.set(row_id, col_id, value)
   }
     
-  def getMatrix: SparseDoubleMatrix2D = matrix
+  def matrix = _matrix
 
 }

@@ -20,7 +20,7 @@ libraryDependencies += "storm" % "storm" % "0.8.0"
 
 libraryDependencies += "redis.clients" % "jedis" % "2.0.0"
 
-libraryDependencies += "colt" % "colt" % "1.2.0"
+libraryDependencies += "net.sourceforge.parallelcolt" % "parallelcolt" % "0.10.0"
 
 // This is to prevent error [java.lang.OutOfMemoryError: PermGen space]
 javaOptions += "-XX:MaxPermSize=1g"
