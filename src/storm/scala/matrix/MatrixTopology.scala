@@ -47,9 +47,11 @@ class FileMatrixSpout(filename: String, concurrency: Integer)
       
       val rowFirst = (matrix.rows / linearDivision) *
         rowCoordinate
+      println("rowFirst: " + rowFirst)
 
       val columnFirst = (matrix.columns / linearDivision) * 
         columnCoordinate
+      println("columnFirst: " + columnFirst)
 
       var rowLast = 0
       if (rowFirst == linearDivision - 1) { // the last
@@ -58,6 +60,7 @@ class FileMatrixSpout(filename: String, concurrency: Integer)
         rowLast = rowFirst +  
           (matrix.rows / linearDivision) - 1
       }
+      println("rowLast: " + rowLast)
 
       var columnLast = 0
       if (columnFirst == linearDivision - 1) { // the last
@@ -66,11 +69,13 @@ class FileMatrixSpout(filename: String, concurrency: Integer)
         columnLast = columnFirst + 
           (matrix.columns / linearDivision) - 1
       }
+      println("columnLast: " + columnLast.toString)
+      
       emit(List(
         rowFirst until (rowLast + 1),
         columnFirst until (columnLast + 1),
-        matrix.viewPart(rowFirst, rowFirst - rowLast, 0, matrix.columns),
-        matrix.viewPart(0, matrix.rows, columnFirst, columnFirst - columnLast)
+        matrix.viewPart(rowFirst, 0, rowLast - rowFirst, matrix.columns),
+        matrix.viewPart(0, columnFirst, matrix.rows, columnLast - columnFirst)
       ))
     }
   }
