@@ -18,12 +18,13 @@ class MatrixMarket(filename: String) {
   val param_parser = """(\d+) (\d+) (\d+)""".r
   val param_parser(rows, columns, nonzeros) = lines.next
   private val _matrix = new SparseDoubleMatrix2D(
-      rows.toInt + 1, columns.toInt + 1, nonzeros.toInt, 0.1, 0.9)
+      rows.toInt, columns.toInt, nonzeros.toInt, 0.1, 0.9)
 
   for (cell <- lines) {
     val args = cell.split(" ")
-    val row_id = args(0).toInt
-    val col_id = args(1).toInt
+    // file format is 1 indexed
+    val row_id = args(0).toInt - 1
+    val col_id = args(1).toInt - 1
     val value = args(2).toDouble
     _matrix.set(row_id, col_id, value)
   }
