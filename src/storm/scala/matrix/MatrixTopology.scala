@@ -11,32 +11,32 @@ import redis.clients.jedis._
 import scala.util.matching.Regex.Match
 import scala.collection.mutable.ListBuffer
 import scala.collection.JavaConversions._
-import cern.colt.matrix.tdouble.impl.SparseDoubleMatrix2D
 
 class FileMatrixSpout(filename: String, concurrency: Integer) 
   extends StormSpout(List("row_indices", "column_indices", "rows", "columns")) {
 
-  var matrix: cern.colt.matrix.tdouble.impl.SparseDoubleMatrix2D = _
+  var matrix: Matrix = _
   var linearDivision: Integer = _
-  var zippedIterator: scala.collection.Iterator[(Int,Int)] = _
-  var rowRange: scala.collection.immutable.Range = _
-  var columnRange: scala.collection.immutable.Range = _
-  var rowIterator: scala.collection.Iterator[Int] = _
-  var columnIterator: scala.collection.Iterator[Int] = _
+  var zipped: ListBuffer[(Int,Int)] = _
+  var zippedIterator: Iterator[(Int,Int)] = _
   var matrixMarket: MatrixMarket = _
 
-  def setup {
+  setup {
     matrixMarket = new storm.scala.matrix.MatrixMarket(filename)
     linearDivision = scala.math.sqrt(concurrency.toDouble).toInt
-    rowRange = 0 until linearDivision
-    rowIterator = rowRange.iterator
-    columnRange = 0 until linearDivision 
-    columnIterator = columnRange.iterator
     matrix = matrixMarket.matrix
-    zippedIterator = rowIterator.zipAll(columnIterator,-1,-1)
-    for (i <- 0 until 100) {
-      println(zippedIterator)
+
+    zipped = new ListBuffer[(Int,Int)]
+    for (i <- 0 until linearDivision) {
+      for (j <- 0 until linearDivision) {
+        zipped += Tuple2(i,j)
+      }
     }
+    zippedIterator = zipped.iterator
+    while (zippedIterator.hasNext) {
+      println(zippedIterator.next)
+    }
+    zippedIterator = zipped.iterator
   }
 
   def nextTuple {
@@ -148,11 +148,10 @@ class MatrixBlockMult extends StormBolt(List("rowIndices", "columnIndices", "res
 
   def execute(t: Tuple) = t matchSeq {
     case Seq(rowIndices: List[Int], columnIndices: List[Int], 
-      rows: SparseDoubleMatrix2D, columns: SparseDoubleMatrix2D) => 
+      rows: Matrix, columns: Matrix) => 
         using anchor t toStream "rowIndices" emit (rowIndices)
         using anchor t toStream "columnIndices" emit (columnIndices)
-        val target = new SparseDoubleMatrix2D(rows.columns, columns.rows)
-        rows.zMult(columns, target, 1, 0, false, false)
+        val target = rows.mult(columns)
         using anchor t toStream "result" emit target
         t ack
     case _ => {}
