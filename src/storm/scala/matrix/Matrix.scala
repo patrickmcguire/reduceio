@@ -32,6 +32,8 @@ class Matrix(matrix: DoubleMatrix2D) extends Serializable {
 
   def set(x:Int, y:Int, value:Double) = _matrix.set(x, y, value)
 
+  def get(x:Int, y:Int) = _matrix.get(x, y)
+
   def viewPart(row: Int, column: Int,
                height: Int, width: Int) = new Matrix(_matrix.viewPart(row, column, height, width))
 

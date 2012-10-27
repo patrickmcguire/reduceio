@@ -107,9 +107,15 @@ class MatrixBlockMult extends StormBolt(List("rowFirst", "rowLast",
         using anchor t toStream "columnFirst" emit (columnFirst)
         using anchor t toStream "columnLast" emit (columnLast)
         val target = m1Rows.mult(m2Columns)
+        for (r <- 0 until target.rows) {
+          for (c <- 0 until target.columns) {
+            println(r.toString + "," + c.toString + "," +
+              target.get(r,c))
+          }
+        }
         using anchor t toStream "result" emit target
         t ack
-    case _ => {t ack}
+    case _ => {throw new Exception("Invalid tuple type")}
   }
 }
 
