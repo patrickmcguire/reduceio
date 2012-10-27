@@ -12,29 +12,42 @@ import scala.util.matching.Regex.Match
 import scala.collection.mutable.ListBuffer
 import scala.collection.JavaConversions._
 
-class FileMatrixSpout(filename: String, concurrency: Integer) 
-  extends StormSpout(List("row_indices", "column_indices", "rows", "columns")) {
+object SplitSize {
+  val Default = 1000
+}
 
-  var matrix: Matrix = _
-  var linearDivision: Integer = _
+class DualMatrixSpout(m1FilePath: String, m2FilePath: String,
+                      m1Transpose: Boolean, m2Transpose: Boolean) 
+  extends StormSpout(outputFields = List("rowFirst", "rowLast", 
+                                         "columnFirst", "columnLast",
+                                         "m1Rows", "m2Columns")) {
+
   var zipped: ListBuffer[(Int,Int)] = _
   var zippedIterator: Iterator[(Int,Int)] = _
-  var matrixMarket: MatrixMarket = _
+  var m1: Matrix = _
+  var m2: Matrix = _
+
 
   setup {
-    matrixMarket = new storm.scala.matrix.MatrixMarket(filename)
-    linearDivision = scala.math.sqrt(concurrency.toDouble).toInt
-    matrix = matrixMarket.matrix
+    val market1 = new MatrixMarket(m1FilePath)
+    if (m1Transpose) {
+      m1 = market1.matrix
+    } else {
+      m1 = market1.matrix.transpose
+    }
+
+    val market2 = new MatrixMarket(m2FilePath)
+    if (m2Transpose) {
+      m2 = market2.matrix
+    } else {
+      m2 = market2.matrix.transpose
+    }
 
     zipped = new ListBuffer[(Int,Int)]
-    for (i <- 0 until linearDivision) {
-      for (j <- 0 until linearDivision) {
+    for (i <- 0 until (m1.rows / SplitSize.Default)) {
+      for (j <- 0 until (m2.columns / SplitSize.Default)) {
         zipped += Tuple2(i,j)
       }
-    }
-    zippedIterator = zipped.iterator
-    while (zippedIterator.hasNext) {
-      println(zippedIterator.next)
     }
     zippedIterator = zipped.iterator
   }
@@ -45,137 +58,82 @@ class FileMatrixSpout(filename: String, concurrency: Integer)
       val rowCoordinate = blockCoordinates._1
       val columnCoordinate = blockCoordinates._2
       
-      val rowFirst = (matrix.rows / linearDivision) *
-        rowCoordinate
-      println("rowFirst: " + rowFirst)
+      val rowFirst = rowCoordinate * SplitSize.Default
+      val columnFirst = columnCoordinate * SplitSize.Default
 
-      val columnFirst = (matrix.columns / linearDivision) * 
-        columnCoordinate
-      println("columnFirst: " + columnFirst)
+      var rowLast = rowFirst + SplitSize.Default - 1
+      if (rowLast > m1.rows) { // the last
+        rowLast = m1.rows - 1
+      } 
 
-      var rowLast = 0
-      if (rowFirst == linearDivision - 1) { // the last
-        rowLast = matrix.rows - 1
-      } else {
-        rowLast = rowFirst +  
-          (matrix.rows / linearDivision) - 1
+      var columnLast = columnFirst + SplitSize.Default - 1
+      if (columnLast > m2.columns) { // the last
+        columnLast = m2.columns - 1
       }
-      println("rowLast: " + rowLast)
 
-      var columnLast = 0
-      if (columnFirst == linearDivision - 1) { // the last
-        columnLast = matrix.columns - 1
-      } else {
-        columnLast = columnFirst + 
-          (matrix.columns / linearDivision) - 1
-      }
-      println("columnLast: " + columnLast.toString)
+      println("Rows are a " + 
+             (rowLast - rowFirst).toString + " by " +
+             (m1.columns).toString + " matrix")
+
+      println("Columns are a " +
+             (m2.rows).toString + " by " +
+             (columnLast - columnFirst).toString + " matrix")
       
-      emit(List(
-        rowFirst until (rowLast + 1),
-        columnFirst until (columnLast + 1),
-        matrix.viewPart(rowFirst, 0, rowLast - rowFirst, matrix.columns),
-        matrix.viewPart(0, columnFirst, matrix.rows, columnLast - columnFirst)
-      ))
+      using msgId(Random.nextInt) emit(
+        rowFirst: java.lang.Integer,
+        rowLast: java.lang.Integer,
+        columnFirst: java.lang.Integer,
+        columnLast: java.lang.Integer,
+        m1.viewPart(rowFirst, 0, rowLast - rowFirst, m1.columns),
+        m2.viewPart(0, columnFirst, m2.rows, columnLast - columnFirst)
+      )
     }
   }
 }
 
-class RedisMatrixSpout extends StormSpout(outputFields = List("rownum", "row")) {
-  var rowkey: scala.util.matching.Regex = _
-  var it: Iterator[String] = _
-  var redis_conn: Jedis = _
-  var keys: scala.collection.mutable.Set[String] = _
-  var buff: ListBuffer[(Int, String)] = _
-
-  setup {
-    rowkey = new scala.util.matching.Regex("""matrix:row:(\d*)""", "row")
-    redis_conn = new Jedis("localhost")
-    keys = redis_conn.keys("matrix:row:*")
-    it = keys.iterator
-    buff = new ListBuffer[(Int, String)]
-  }
-  
-  def nextTuple {
-    if (it.hasNext) {
-      val key = it.next
-      val r = key match {
-        case rowkey(row) => row.toInt
-        case _ => -1
-      }
-      val tup = Tuple2(r, redis_conn.get("matrix:row:" + r.toString))
-      buff += tup
-      println(buff)
-      using msgId(Random.nextInt) emit (tup)
-    } else {
-      using msgId(Random.nextInt) emit (List(-1,""))
-    }
-  }
-}
-
-class MatrixPrint extends StormBolt(List("r1", "c1", "v1", "r2", "c2", "v2")) {
-  var counts: HashMap[Int, String] = _
-  setup {
-    counts = new HashMap[Int, String]()
-  }
-
-  def execute(t: Tuple){
-    t matchSeq {
-      case Seq(row_id: Int, row: String) => new Tuple2(row_id, row)
-      counts += new Tuple2(row_id, row)
-      using anchor t toStream "row_id" emit (row_id)
-      using anchor t toStream "row" emit (row)
-      t ack
-    }
-  }
-  
-  /*
-   * Summa algorith for total morons
-   * I, J represent all rows, columns owned by processor
-   * k is single row or column
-   *   - or block of b rows or columbs
-   * C(I,J) = C(I,J) + sum_k A(I,k)*B(k,J)
-   *
-   * for k=(0..n-1)
-   *   for all I = 1 to p_r // in parallel
-   *      owner of A(I,k) broadcasts it to whole processor row
-   *   for all J = 1 to p_c // in parallel
-   *      owner of B(k,J) broadcasts it to whole processor column
-   *   Receive A(I,k) into Acol
-   *   Receive B(k,j) into Brow
-   *
-   *   C(myproc, myproc) = C(myproc, myproc) + Acol * Brow
-   */
-}
-
-
-class MatrixBlockMult extends StormBolt(List("rowIndices", "columnIndices", "result")) {
+class MatrixBlockMult extends StormBolt(List("rowFirst", "rowLast", 
+                                             "columnFirst",  "columnLast", 
+                                             "result")) {
 
   def execute(t: Tuple) = t matchSeq {
-    case Seq(rowIndices: List[Int], columnIndices: List[Int], 
-      rows: Matrix, columns: Matrix) => 
-        using anchor t toStream "rowIndices" emit (rowIndices)
-        using anchor t toStream "columnIndices" emit (columnIndices)
-        val target = rows.mult(columns)
+    case Seq(rowFirst: Int,
+             rowLast: Int,
+             columnFirst: Int,
+             columnLast: Int,
+             m1Rows: Matrix,
+             m2Columns: Matrix) => 
+        using anchor t toStream "rowFirst" emit (rowFirst)
+        using anchor t toStream "rowLast" emit (rowLast)
+        using anchor t toStream "columnFirst" emit (columnFirst)
+        using anchor t toStream "columnLast" emit (columnLast)
+        val target = m1Rows.mult(m2Columns)
         using anchor t toStream "result" emit target
         t ack
+    case _ => {t ack}
+  }
+}
+
+class MatrixBlockMerge extends StormBolt(List("rowFirst", "rowLast",
+                                              "columnFirst", "columnLast", "result")) {
+
+  def execute(t: Tuple) = t matchSeq {
     case _ => {}
   }
 }
 
 
-class MatrixCombine
-
-
 object MatrixTopology {
   def main(args: Array[String]) = {
     val builder = new TopologyBuilder
-    builder.setSpout("matrix", new FileMatrixSpout("/home/patrick/Code/hivemind/count.mtx", 16), 1)
-    builder.setBolt("mult", new MatrixPrint, 1)
+    val filepath = "/home/patrick/Code/hivemind/count.mtx"
+    builder.setSpout("matrix-spewer", new DualMatrixSpout(
+      filepath, filepath, false, true))
+    builder.setBolt("matrix-block-mult", new MatrixBlockMult, 8)
+      .shuffleGrouping("matrix-spewer")
 
     val conf = new Config
     conf.setDebug(true)
-    conf.setMaxTaskParallelism(1)
+    conf.setMaxTaskParallelism(8)
 
     val cluster = new LocalCluster
     cluster.submitTopology("matrix-mult", conf, builder.createTopology)

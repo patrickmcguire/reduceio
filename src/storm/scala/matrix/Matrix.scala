@@ -3,12 +3,12 @@ package storm.scala.matrix
 import cern.colt.matrix.tdouble.DoubleMatrix2D
 import cern.colt.matrix.tdouble.impl.SparseDoubleMatrix2D
 
-class Matrix(matrix: DoubleMatrix2D) {
-
-  private val _matrix = matrix
+class Matrix(matrix: DoubleMatrix2D) extends Serializable {
+  
+  val _matrix = matrix
 
   def this(rows: Int, columns: Int) = this(new SparseDoubleMatrix2D(rows, columns))
-    
+  
   def mult(otherMatrix: Matrix):DoubleMatrix2D = {
     if (otherMatrix.rows != _matrix.columns) {
       // throw an error
@@ -19,7 +19,7 @@ class Matrix(matrix: DoubleMatrix2D) {
     return resultMatrix
   }
 
-  def square():DoubleMatrix2D = {
+  def square:DoubleMatrix2D = {
     val resultMatrix = new SparseDoubleMatrix2D(_matrix.rows, matrix.rows)
     return _matrix.zMult(_matrix, resultMatrix, 1.0, 1.0, false, true)
   }
@@ -34,4 +34,6 @@ class Matrix(matrix: DoubleMatrix2D) {
 
   def viewPart(row: Int, column: Int,
                height: Int, width: Int) = new Matrix(_matrix.viewPart(row, column, height, width))
+
+  def transpose = new Matrix(_matrix.viewDice)
 }
