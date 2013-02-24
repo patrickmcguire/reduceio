@@ -38,4 +38,6 @@ class Matrix(matrix: DoubleMatrix2D) extends Serializable {
                height: Int, width: Int) = new Matrix(_matrix.viewPart(row, column, height, width))
 
   def transpose = new Matrix(_matrix.viewDice)
+
+  def copy = new Matrix(_matrix.copy)
 }

@@ -14,7 +14,7 @@ storm.local.mode.zmq: false
 
 ### nimbus.* configs are for the master
 nimbus.thrift.port: 6627
-nimbus.childopts: "-Xmx2048m"
+nimbus.childopts: "-Xmx4096m"
 nimbus.task.timeout.secs: 30
 nimbus.supervisor.timeout.secs: 60
 nimbus.monitor.freq.secs: 10
@@ -29,7 +29,7 @@ supervisor.slots.ports:
     - 6701
     - 6702
     - 6703
-supervisor.childopts: "-Xmx2048m"
+supervisor.childopts: "-Xmx4096m"
 #how long supervisor will wait to ensure that a worker process is started
 supervisor.worker.start.timeout.secs: 600
 #how long between heartbeats until supervisor considers that worker dead and tries to restart it
@@ -41,7 +41,7 @@ supervisor.heartbeat.frequency.secs: 5
 supervisor.enable: true
 
 ### worker.* configs are for task workers
-worker.childopts: "-Xmx2048m"
+worker.childopts: "-Xmx4096m"
 worker.heartbeat.frequency.secs: 1
 
 task.heartbeat.frequency.secs: 3
